@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MedPredictor-AI command-line training and prediction pipeline."""
+"""MedPredictor-AI training, benchmarking, and prediction CLI."""
 
 from __future__ import annotations
 
@@ -32,38 +32,42 @@ from visualization import (
 )
 
 ROOT_DIR = Path(__file__).resolve().parent
+TARGET_ACCURACY = 0.90
 
 
-def print_header() -> None:
-    print("=" * 60)
-    print("  MedPredictor-AI - Disease Prediction Research Pipeline")
-    print("=" * 60)
-    print()
+def print_header():
+    print("=" * 72)
+    print("  MedPredictor-AI - Research Model Benchmark")
+    print("=" * 72)
 
 
-def print_section(title: str) -> None:
-    print(f"\n{'─' * 50}")
-    print(f"  {title}")
-    print(f"{'─' * 50}")
+def print_section(title):
+    print(f"\n{'─' * 56}\n  {title}\n{'─' * 56}")
 
 
-def print_metrics(results: list[dict]) -> None:
+def print_metrics(results):
     print(
-        f"\n  {'Model':<25} {'Accuracy':>10} {'Precision':>10} "
-        f"{'Recall':>10} {'F1':>10} {'ROC AUC':>10}"
+        f"\n  {'Model':<23} {'CV Acc':>8} {'Test Acc':>9} "
+        f"{'Bal Acc':>9} {'Recall':>8} {'ROC AUC':>9}"
     )
-    print(f"  {'─' * 75}")
+    print(f"  {'─' * 70}")
     for result in results:
+        cv = result["cv_accuracy_mean"]
+        cv_text = f"{cv:.3f}" if cv == cv else "n/a"
         print(
-            f"  {result['model']:<25} {result['accuracy']:>10.4f} "
-            f"{result['precision']:>10.4f} {result['recall']:>10.4f} "
-            f"{result['f1_score']:>10.4f} {result['roc_auc']:>10.4f}"
+            f"  {result['model']:<23} {cv_text:>8} "
+            f"{result['accuracy']:>9.3f} {result['balanced_accuracy']:>9.3f} "
+            f"{result['recall']:>8.3f} {result['roc_auc']:>9.3f}"
         )
     print()
 
 
-def run_pipeline(disease: str, interactive: bool = False) -> list[dict]:
-    """Train, evaluate, visualize, save, and demonstrate one disease pipeline."""
+def run_pipeline(
+    disease,
+    interactive=False,
+    fast=False,
+    no_xgboost=False,
+):
     if disease == "diabetes":
         df = load_diabetes_data()
         target_col = "Outcome"
@@ -77,31 +81,21 @@ def run_pipeline(disease: str, interactive: bool = False) -> list[dict]:
     else:
         raise ValueError(f"Unsupported disease: {disease}")
 
-    print_section(f"Loading {disease_title} Dataset")
+    print_section(f"{disease_title}: data and split")
     summary = get_dataset_summary(df, disease_title)
     print(
         f"  Rows: {summary['rows']} | Columns: {summary['columns']} "
-        f"| Missing: {summary['missing_values']}"
+        f"| Missing after loading: {summary['missing_values']}"
     )
-    print(f"  Features: {', '.join(summary['features'])}")
-
-    print_section(f"Target Distribution - {disease_title}")
-    target_counts = df[target_col].value_counts()
-    total = len(df)
-    negative = int(target_counts.get(0, 0))
-    positive = int(target_counts.get(1, 0))
-    print(f"  Negative (0): {negative} ({negative / total * 100:.1f}%)")
-    print(f"  Positive (1): {positive} ({positive / total * 100:.1f}%)")
     plot_target_distribution(df, target_col, disease_title, f"{disease}_target_dist.png")
 
-    print_section("Preparing Data")
     X_train, X_test, y_train, y_test, scaler, feature_names, imputer = prepare_dataset(
         df, target_col
     )
-    print(f"  Training set: {X_train.shape[0]} samples")
-    print(f"  Test set:     {X_test.shape[0]} samples")
+    print(f"  Training rows: {len(y_train)}")
+    print(f"  Held-out test rows: {len(y_test)}")
 
-    print_section("Feature Analysis")
+    print_section("Feature analysis")
     importance = get_feature_importance(X_train, y_train, feature_names)
     analysis = analyze_features(X_train, y_train, feature_names)
     for _, row in analysis.head(5).iterrows():
@@ -110,57 +104,62 @@ def run_pipeline(disease: str, interactive: bool = False) -> list[dict]:
             f"MI={row['mi_score']:.4f}"
         )
 
-    print_section("Generating Visualizations")
-    print(
-        "  Correlation heatmap:",
-        plot_correlation_heatmap(
-            df, disease_title, f"{disease}_correlation.png"
-        ),
-    )
-    print(
-        "  Feature importance:",
-        plot_feature_importance(
-            importance, disease_title, f"{disease}_feature_importance.png"
-        ),
+    plot_correlation_heatmap(df, disease_title, f"{disease}_correlation.png")
+    plot_feature_importance(importance, disease_title, f"{disease}_feature_importance.png")
+
+    print_section("Model search")
+    models = get_models(include_xgboost=not no_xgboost, fast=fast)
+    print(f"  Candidates: {', '.join(models)}")
+    if not fast:
+        print("  Selection: 5-fold stratified CV on training data")
+        print("  Final metric: one untouched 20% test split")
+        print("  Threshold tuning: out-of-fold accuracy with minimum recall 0.50")
+
+    results = train_and_evaluate(
+        models,
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+        fast=fast,
+        min_recall=0.50,
     )
 
-    print_section("Training Models")
-    models = get_models()
-    print(f"  Training {len(models)} models: {', '.join(models)}")
-    results = train_and_evaluate(models, X_train, X_test, y_train, y_test)
-
-    print_section(f"Model Performance - {disease_title}")
+    print_section("Benchmark")
     print_metrics(results)
     best = get_best_model(results)
-    print(f"  Best Model: {best['model']} (ROC AUC: {best['roc_auc']:.4f})")
+    target_met = best["accuracy"] >= TARGET_ACCURACY
+    print(f"  Best model: {best['model']}")
+    print(f"  Decision threshold: {best['threshold']:.3f}")
+    print(
+        f"  90% held-out accuracy target: "
+        f"{'MET' if target_met else 'NOT MET'} ({best['accuracy'] * 100:.2f}%)"
+    )
+    if not target_met:
+        print(
+            "  The test set is untouched; do not manipulate it to force the target. "
+            "Use better data or external validation instead."
+        )
 
-    print(
-        "  Model comparison:",
-        plot_model_comparison(
-            results, disease_title, f"{disease}_model_comparison.png"
-        ),
-    )
-    print(
-        "  ROC curves:",
-        plot_roc_curves(
-            results, X_test, y_test, disease_title, f"{disease}_roc_curves.png"
-        ),
-    )
-    print(
-        "  Confusion matrix:",
-        plot_confusion_matrix(
-            best["confusion_matrix"],
-            best["model"],
-            disease_title,
-            f"{disease}_confusion_matrix.png",
-        ),
+    plot_model_comparison(results, disease_title, f"{disease}_model_comparison.png")
+    plot_roc_curves(results, X_test, y_test, disease_title, f"{disease}_roc_curves.png")
+    plot_confusion_matrix(
+        best["confusion_matrix"],
+        best["model"],
+        disease_title,
+        f"{disease}_confusion_matrix.png",
     )
 
-    print_section("Saving Best Model")
-    model_path = save_model(best["trained_model"], scaler, model_filename, imputer=imputer)
-    print(f"  Model saved: {model_path}")
+    model_path = save_model(
+        best["trained_model"],
+        scaler,
+        model_filename,
+        imputer=imputer,
+        threshold=best["threshold"],
+    )
+    print(f"  Saved trusted model: {model_path}")
 
-    print_section("Prediction Demo")
+    print_section("Prediction demo")
     patient = (
         interactive_diabetes_input()
         if interactive and disease == "diabetes"
@@ -171,48 +170,56 @@ def run_pipeline(disease: str, interactive: bool = False) -> list[dict]:
         else get_sample_heart_patient()
     )
 
-    print(f"\n  Patient Data: {patient}")
     result = (
-        predict_diabetes(best["trained_model"], scaler, patient)
+        predict_diabetes(
+            best["trained_model"],
+            scaler,
+            patient,
+            imputer=imputer,
+            threshold=best["threshold"],
+        )
         if disease == "diabetes"
-        else predict_heart_disease(best["trained_model"], scaler, patient)
+        else predict_heart_disease(
+            best["trained_model"],
+            scaler,
+            patient,
+            imputer=imputer,
+            threshold=best["threshold"],
+        )
     )
-
-    print(f"\n  Prediction: {result['label']}")
-    print(f"  Confidence: {result['confidence']:.1f}%")
-    print(f"  Negative probability: {result['probability_negative']:.1f}%")
+    print(f"  Prediction: {result['label']}")
     print(f"  Positive probability: {result['probability_positive']:.1f}%")
     return results
 
 
-def main() -> int:
+def main():
     parser = argparse.ArgumentParser(
-        description="Train and evaluate the MedPredictor-AI research models.",
+        description="Benchmark and run MedPredictor-AI research models."
     )
+    parser.add_argument("--disease", choices=["diabetes", "heart", "all"], default="all")
+    parser.add_argument("--interactive", action="store_true")
     parser.add_argument(
-        "--disease",
-        choices=["diabetes", "heart", "all"],
-        default="all",
-        help="Disease pipeline to run (default: all).",
-    )
-    parser.add_argument(
-        "--interactive",
+        "--fast",
         action="store_true",
-        help="Enter a custom example patient after model training.",
+        help="Skip hyperparameter search for quick smoke tests.",
+    )
+    parser.add_argument(
+        "--no-xgboost",
+        action="store_true",
+        help="Disable optional XGBoost even when installed.",
     )
     args = parser.parse_args()
 
     print_header()
     diseases = ["diabetes", "heart"] if args.disease == "all" else [args.disease]
-
     for disease in diseases:
-        run_pipeline(disease, interactive=args.interactive)
-        print()
-
-    print("=" * 60)
-    print(f"  Pipeline complete. Outputs: {ROOT_DIR / 'outputs'}")
-    print("=" * 60)
-    return 0
+        run_pipeline(
+            disease,
+            interactive=args.interactive,
+            fast=args.fast,
+            no_xgboost=args.no_xgboost,
+        )
+    print(f"\nOutputs: {ROOT_DIR / 'outputs'}")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Prediction helpers for the trained MedPredictor-AI research models."""
+"""Prediction helpers for trained MedPredictor-AI research models."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ HEART_FEATURES = [
 ]
 
 
-def _predict(model, scaler, patient_data: dict, features: list[str], imputer=None) -> dict:
+def _predict(model, scaler, patient_data, features, *, imputer=None, threshold=0.5):
     missing = [feature for feature in features if feature not in patient_data]
     if missing:
         raise ValueError(f"Missing patient fields: {missing}")
@@ -35,26 +35,37 @@ def _predict(model, scaler, patient_data: dict, features: list[str], imputer=Non
     if imputer is not None:
         X = imputer.transform(X)
     X_scaled = scaler.transform(X)
-    prediction = int(model.predict(X_scaled)[0])
-    probabilities = np.asarray(model.predict_proba(X_scaled)[0], dtype=float)
 
+    probabilities = np.asarray(model.predict_proba(X_scaled)[0], dtype=float)
+    threshold = float(threshold)
+    if not 0.0 < threshold < 1.0:
+        raise ValueError("Prediction threshold must be between 0 and 1.")
+
+    prediction = int(probabilities[1] >= threshold)
     return {
         "prediction": prediction,
+        "threshold": threshold,
         "confidence": float(probabilities.max()) * 100,
         "probability_negative": float(probabilities[0]) * 100,
         "probability_positive": float(probabilities[1]) * 100,
     }
 
 
-def predict_diabetes(model, scaler, patient_data, imputer=None):
-    result = _predict(model, scaler, patient_data, DIABETES_FEATURES, imputer)
-    result["label"] = "Diabetic" if result["prediction"] == 1 else "Non-Diabetic"
+def predict_diabetes(model, scaler, patient_data, *, imputer=None, threshold=0.5):
+    result = _predict(
+        model, scaler, patient_data, DIABETES_FEATURES,
+        imputer=imputer, threshold=threshold,
+    )
+    result["label"] = "Diabetic" if result["prediction"] else "Non-Diabetic"
     return result
 
 
-def predict_heart_disease(model, scaler, patient_data, imputer=None):
-    result = _predict(model, scaler, patient_data, HEART_FEATURES, imputer)
-    result["label"] = "Higher Risk" if result["prediction"] == 1 else "Lower Risk"
+def predict_heart_disease(model, scaler, patient_data, *, imputer=None, threshold=0.5):
+    result = _predict(
+        model, scaler, patient_data, HEART_FEATURES,
+        imputer=imputer, threshold=threshold,
+    )
+    result["label"] = "Higher Risk" if result["prediction"] else "Lower Risk"
     return result
 
 
@@ -93,38 +104,34 @@ def _interactive_input(prompts):
 
 def interactive_diabetes_input():
     print("\n--- Enter Example Patient Data for Diabetes Prediction ---")
-    return _interactive_input(
-        {
-            "Pregnancies": "Number of pregnancies: ",
-            "Glucose": "Glucose level (mg/dL): ",
-            "BloodPressure": "Blood pressure (mm Hg): ",
-            "SkinThickness": "Skin thickness (mm): ",
-            "Insulin": "Insulin level (mu U/ml): ",
-            "BMI": "BMI: ",
-            "DiabetesPedigreeFunction": "Diabetes pedigree function: ",
-            "Age": "Age: ",
-        }
-    )
+    return _interactive_input({
+        "Pregnancies": "Number of pregnancies: ",
+        "Glucose": "Glucose level (mg/dL): ",
+        "BloodPressure": "Blood pressure (mm Hg): ",
+        "SkinThickness": "Skin thickness (mm): ",
+        "Insulin": "Insulin level (mu U/ml): ",
+        "BMI": "BMI: ",
+        "DiabetesPedigreeFunction": "Diabetes pedigree function: ",
+        "Age": "Age: ",
+    })
 
 
 def interactive_heart_input():
     print("\n--- Enter Example Patient Data for Heart Risk Prediction ---")
-    return _interactive_input(
-        {
-            "male": "Sex (1=male, 0=female): ",
-            "age": "Age: ",
-            "education": "Education level (1-4): ",
-            "currentSmoker": "Current smoker (1=yes, 0=no): ",
-            "cigsPerDay": "Cigarettes per day: ",
-            "BPMeds": "Blood-pressure medication (1=yes, 0=no): ",
-            "prevalentStroke": "History of stroke (1=yes, 0=no): ",
-            "prevalentHyp": "Hypertension (1=yes, 0=no): ",
-            "diabetes": "Diabetes (1=yes, 0=no): ",
-            "totChol": "Total cholesterol (mg/dL): ",
-            "sysBP": "Systolic BP (mm Hg): ",
-            "diaBP": "Diastolic BP (mm Hg): ",
-            "BMI": "BMI: ",
-            "heartRate": "Heart rate (bpm): ",
-            "glucose": "Glucose level (mg/dL): ",
-        }
-    )
+    return _interactive_input({
+        "male": "Sex (1=male, 0=female): ",
+        "age": "Age: ",
+        "education": "Education level (1-4): ",
+        "currentSmoker": "Current smoker (1=yes, 0=no): ",
+        "cigsPerDay": "Cigarettes per day: ",
+        "BPMeds": "Blood-pressure medication (1=yes, 0=no): ",
+        "prevalentStroke": "History of stroke (1=yes, 0=no): ",
+        "prevalentHyp": "Hypertension (1=yes, 0=no): ",
+        "diabetes": "Diabetes (1=yes, 0=no): ",
+        "totChol": "Total cholesterol (mg/dL): ",
+        "sysBP": "Systolic BP (mm Hg): ",
+        "diaBP": "Diastolic BP (mm Hg): ",
+        "BMI": "BMI: ",
+        "heartRate": "Heart rate (bpm): ",
+        "glucose": "Glucose level (mg/dL): ",
+    })

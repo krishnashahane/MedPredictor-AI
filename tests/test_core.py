@@ -34,14 +34,9 @@ def test_prediction_rejects_non_finite_patient_values():
     scaler = StandardScaler().fit(X)
     model = LogisticRegression().fit(scaler.transform(X), y)
     patient = {
-        "Pregnancies": 1,
-        "Glucose": math.nan,
-        "BloodPressure": 70,
-        "SkinThickness": 20,
-        "Insulin": 80,
-        "BMI": 25,
-        "DiabetesPedigreeFunction": 0.3,
-        "Age": 30,
+        "Pregnancies": 1, "Glucose": math.nan, "BloodPressure": 70,
+        "SkinThickness": 20, "Insulin": 80, "BMI": 25,
+        "DiabetesPedigreeFunction": 0.3, "Age": 30,
     }
     try:
         predict_diabetes(model, scaler, patient)
@@ -57,7 +52,7 @@ def test_model_artifacts_stay_inside_outputs(tmp_path):
     original = models.MODELS_DIR
     models.MODELS_DIR = tmp_path
     try:
-        saved = save_model(model, scaler, "safe.joblib")
+        saved = save_model(model, scaler, "safe.joblib", threshold=0.6)
         assert saved.parent == tmp_path
         assert saved.exists()
     finally:
@@ -68,3 +63,19 @@ def test_imputation_is_fitted_on_training_split():
     df = load_diabetes_data()
     X_train, X_test, *_rest = prepare_dataset(df, "Outcome")
     assert X_train.shape[1] == X_test.shape[1]
+
+
+def test_prediction_uses_persisted_threshold():
+    X = np.array([[0.0], [1.0], [2.0], [3.0]])
+    y = np.array([0, 0, 1, 1])
+    scaler = StandardScaler().fit(X)
+    model = LogisticRegression().fit(scaler.transform(X), y)
+    patient = {
+        "Pregnancies": 1, "Glucose": 2.0, "BloodPressure": 70,
+        "SkinThickness": 20, "Insulin": 80, "BMI": 25,
+        "DiabetesPedigreeFunction": 0.3, "Age": 30,
+    }
+    result = predict_diabetes(
+        model, scaler, patient, threshold=0.99
+    )
+    assert result["threshold"] == 0.99
