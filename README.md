@@ -28,7 +28,7 @@ Models are ranked by ROC AUC on the held-out test set.
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - pip
 
 Install runtime dependencies:
@@ -95,7 +95,7 @@ MedPredictor-AI/
 
 ## Data handling
 
-For diabetes, zero values in Glucose, BloodPressure, SkinThickness, Insulin, and BMI are treated as missing and replaced with the corresponding dataset median.
+For diabetes, zero values in Glucose, BloodPressure, SkinThickness, Insulin, and BMI are treated as missing. Median imputation is fitted only on the training split and then applied to the test split and future predictions.
 
 For heart disease, rows containing missing values are removed and `TenYearCHD` is renamed to `HeartDiseaseRisk`.
 
