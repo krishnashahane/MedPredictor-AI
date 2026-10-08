@@ -1,125 +1,181 @@
 # MedPredictor-AI
 
-MedPredictor-AI is an offline Python machine-learning research project for experimenting with diabetes and ten-year cardiovascular-risk classification.
+MedPredictor-AI is an **offline machine-learning research project** for two binary classification tasks:
 
-It trains several scikit-learn classifiers, compares their performance, generates diagnostic plots, saves the best trained artifact, and runs a sample or interactive prediction.
+- **Diabetes classification** using the PIMA Indians Diabetes dataset.
+- **Ten-year cardiovascular-risk classification** using the Framingham dataset.
 
-> **Medical disclaimer:** This repository is for education and research. Its predictions are not medical diagnoses and must not be used as a substitute for a qualified clinician or for patient-care decisions.
+> **Medical disclaimer:** this is research/education software, not a clinical diagnostic system.
 
 ## What it does
 
-### Diabetes
-Uses the PIMA Indians Diabetes dataset with predictors for pregnancies, glucose, blood pressure, skin thickness, insulin, BMI, diabetes pedigree function, and age.
+The project takes structured health measurements and:
 
-### Heart disease
-Uses the Framingham dataset and its original `TenYearCHD` target, renamed in code to `HeartDiseaseRisk`.
+1. Loads and validates the repository datasets.
+2. Splits each dataset into training data and one untouched 20% test set.
+3. Fits median imputation and standardization only on the training split.
+4. Benchmarks multiple models with stratified 5-fold cross-validation.
+5. Searches model hyperparameters on training folds.
+6. Tunes the probability threshold from out-of-fold training predictions while enforcing a minimum recall.
+7. Evaluates the selected model once on the untouched test set.
+8. Generates ROC curves, confusion matrices, feature-importance plots, and model comparisons.
+9. Saves the trained model, imputer, scaler, and decision threshold as one local artifact.
+10. Runs a sample prediction or accepts interactive example input.
 
-## Models
-
-The pipeline evaluates:
+## Model portfolio
 
 - Logistic Regression
 - Random Forest
+- Extra Trees
 - Gradient Boosting
+- HistGradientBoosting
 - Support Vector Machine
-- K-Nearest Neighbors
+- MLP neural network
+- **XGBoost** when the optional XGBoost dependency is installed
 
-Models are ranked by ROC AUC on the held-out test set.
+The current PyPI XGBoost release is 3.4.1 and it requires Python 3.12+. citeturn119920search3
+
+## Accuracy and the 90% target
+
+The benchmark reports both cross-validation accuracy and final held-out test accuracy.
+
+The CLI explicitly prints:
+
+    90% held-out accuracy target: MET / NOT MET
+
+**90% is a target, not a guarantee.** A result above 90% is only legitimate when the untouched test set actually produces it. Repeatedly tuning against the test labels or leaking preprocessing statistics would make the reported accuracy unreliable.
+
+## How prediction works
+
+    raw health values
+          ↓
+    input validation
+          ↓
+    training-fitted imputer
+          ↓
+    training-fitted scaler
+          ↓
+    selected ML model
+          ↓
+    positive-class probability
+          ↓
+    out-of-fold tuned threshold
+          ↓
+    class + probability
+
+The saved artifact contains the preprocessing state required for reproducible inference.
+
+## Metrics
+
+- Cross-validation accuracy
+- Held-out test accuracy
+- Balanced accuracy
+- Precision
+- Recall
+- F1 score
+- ROC AUC
+- Average precision
+- Decision threshold
+- Confusion matrix
+
+Accuracy alone is insufficient for medical classification, especially for the imbalanced Framingham target.
 
 ## Requirements
 
 - Python 3.11+
 - pip
 
-Install runtime dependencies:
+Install the baseline stack:
 
-~~~bash
-python -m pip install -r requirements.txt
-~~~
+    python -m pip install -r requirements.txt
 
-For development/testing:
+Optional XGBoost benchmark:
 
-~~~bash
-python -m pip install -r requirements-dev.txt
-~~~
+    python -m pip install -r requirements-boost.txt
+
+Development/test dependencies:
+
+    python -m pip install -r requirements-dev.txt
+
+scikit-learn 1.9.1 is the currently supported release listed by the project's security policy. citeturn119920search0
 
 ## Run
 
-Train and evaluate both datasets:
+Full tuned benchmark:
 
-~~~bash
-python main.py
-~~~
+    python main.py
 
 Only diabetes:
 
-~~~bash
-python main.py --disease diabetes
-~~~
+    python main.py --disease diabetes
 
 Only heart-risk:
 
-~~~bash
-python main.py --disease heart
-~~~
+    python main.py --disease heart
 
-Enter a custom example patient after training:
+Fast smoke test:
 
-~~~bash
-python main.py --disease diabetes --interactive
-python main.py --disease heart --interactive
-~~~
+    python main.py --fast --disease diabetes
 
-Generated plots and trusted local model artifacts are written to `outputs/`.
+Disable XGBoost:
 
-## Project layout
+    python main.py --no-xgboost
 
-~~~text
-MedPredictor-AI/
-├── data/
-│   ├── diabetes.csv
-│   └── framingham.csv
-├── notebooks/
-├── Health related project/   # original exploratory material
-├── main.py
-├── data_preprocessing.py
-├── feature_engineering.py
-├── models.py
-├── predict.py
-├── visualization.py
-├── requirements.txt
-├── requirements-dev.txt
-├── tests/
-└── outputs/
-~~~
+Interactive example patient:
 
-## Data handling
+    python main.py --disease diabetes --interactive
 
-For diabetes, zero values in Glucose, BloodPressure, SkinThickness, Insulin, and BMI are treated as missing. Median imputation is fitted only on the training split and then applied to the test split and future predictions.
+Generated plots and trusted local model artifacts are written to outputs/.
 
-For heart disease, rows containing missing values are removed and `TenYearCHD` is renamed to `HeartDiseaseRisk`.
+## Data preparation
 
-Scaling is fitted only on the training split and then applied to the test split, avoiding test-set leakage.
+### Diabetes
+
+The PIMA data includes pregnancies, glucose, blood pressure, skin thickness, insulin, BMI, diabetes pedigree function, age, and the Outcome label.
+
+Zero values in physiological fields where zero is not meaningful are treated as missing. Median imputation is fitted on the training split only.
+
+### Heart disease
+
+The Framingham data uses the original TenYearCHD target, renamed in code to HeartDiseaseRisk. Rows containing missing values are removed.
 
 ## Security and reliability
 
-- Dataset and output paths are resolved relative to the repository.
-- Generated filenames accept only simple local names; path traversal is rejected.
-- Patient inputs must be numeric and finite.
-- The project does not load user-supplied model files.
-- Local model artifacts are written with joblib only after training.
-- Joblib is kept above the historical arbitrary-code-execution threshold; GitHub's advisory database lists versions below 1.2.0 as affected. citeturn922828search3
-- scikit-learn is pinned to its currently supported 1.9.x line; its security policy currently lists 1.9.1 as supported and older releases as unsupported. citeturn922828search0
+- Dataset and output paths are repository-relative.
+- Generated filenames reject path traversal.
+- Prediction inputs must be finite numeric values.
+- Test-set labels are not used to tune preprocessing, hyperparameters, or thresholds.
+- The application does not automatically load arbitrary user-supplied joblib files.
+- Never load untrusted joblib/pickle files because Python object deserialization can execute arbitrary code.
+- scikit-learn remains on its currently supported 1.9.x line. citeturn119920search0
 
-Do not load a .joblib or pickle file from an untrusted source. Python object deserialization is not a safe interchange format.
+## Project structure
 
-## Development
+    MedPredictor-AI/
+    ├── data/
+    ├── notebooks/
+    ├── Health related project/
+    ├── main.py
+    ├── data_preprocessing.py
+    ├── feature_engineering.py
+    ├── models.py
+    ├── predict.py
+    ├── visualization.py
+    ├── requirements.txt
+    ├── requirements-boost.txt
+    ├── requirements-dev.txt
+    ├── tests/
+    └── outputs/
 
-~~~bash
-python -m pytest
-~~~
+## Tests
 
-Tests cover dataset loading, feature-analysis edge cases, input validation, and model-artifact path handling.
+    python -m pytest
+
+The tests cover dataset loading, training-split preprocessing, input validation, feature-analysis edge cases, artifact isolation, and threshold-aware prediction.
+
+## Medical disclaimer
+
+**Research/education only.** Predictions are statistical model outputs, not diagnoses or treatment recommendations. These historical datasets do not establish clinical safety, fairness, or real-world performance on today's patient population.
 
 ## License
 
