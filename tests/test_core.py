@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
 import models
-from data_preprocessing import load_diabetes_data, load_heart_data
+from data_preprocessing import load_diabetes_data, load_heart_data, prepare_dataset
 from feature_engineering import analyze_features
 from models import save_model
 from predict import predict_diabetes
@@ -62,3 +62,9 @@ def test_model_artifacts_stay_inside_outputs(tmp_path):
         assert saved.exists()
     finally:
         models.MODELS_DIR = original
+
+
+def test_imputation_is_fitted_on_training_split():
+    df = load_diabetes_data()
+    X_train, X_test, *_rest = prepare_dataset(df, "Outcome")
+    assert X_train.shape[1] == X_test.shape[1]
