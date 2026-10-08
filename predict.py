@@ -18,7 +18,7 @@ HEART_FEATURES = [
 ]
 
 
-def _predict(model, scaler, patient_data: dict, features: list[str]) -> dict:
+def _predict(model, scaler, patient_data: dict, features: list[str], imputer=None) -> dict:
     missing = [feature for feature in features if feature not in patient_data]
     if missing:
         raise ValueError(f"Missing patient fields: {missing}")
@@ -31,7 +31,10 @@ def _predict(model, scaler, patient_data: dict, features: list[str]) -> dict:
     if not all(math.isfinite(value) for value in values):
         raise ValueError("Patient values must be finite numbers.")
 
-    X_scaled = scaler.transform(np.asarray(values, dtype=float).reshape(1, -1))
+    X = np.asarray(values, dtype=float).reshape(1, -1)
+    if imputer is not None:
+        X = imputer.transform(X)
+    X_scaled = scaler.transform(X)
     prediction = int(model.predict(X_scaled)[0])
     probabilities = np.asarray(model.predict_proba(X_scaled)[0], dtype=float)
 
@@ -43,14 +46,14 @@ def _predict(model, scaler, patient_data: dict, features: list[str]) -> dict:
     }
 
 
-def predict_diabetes(model, scaler, patient_data):
-    result = _predict(model, scaler, patient_data, DIABETES_FEATURES)
+def predict_diabetes(model, scaler, patient_data, imputer=None):
+    result = _predict(model, scaler, patient_data, DIABETES_FEATURES, imputer)
     result["label"] = "Diabetic" if result["prediction"] == 1 else "Non-Diabetic"
     return result
 
 
-def predict_heart_disease(model, scaler, patient_data):
-    result = _predict(model, scaler, patient_data, HEART_FEATURES)
+def predict_heart_disease(model, scaler, patient_data, imputer=None):
+    result = _predict(model, scaler, patient_data, HEART_FEATURES, imputer)
     result["label"] = "Higher Risk" if result["prediction"] == 1 else "Lower Risk"
     return result
 
