@@ -69,11 +69,11 @@ def get_best_model(results):
     return results[0]
 
 
-def save_model(model, scaler, filename: str) -> Path:
+def save_model(model, scaler, filename: str, imputer=None) -> Path:
     """Write a trusted local model artifact inside outputs/."""
     if not _SAFE_FILENAME.fullmatch(filename):
         raise ValueError("Invalid model filename.")
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     path = MODELS_DIR / filename
-    joblib.dump({"model": model, "scaler": scaler}, path)
+    joblib.dump({"model": model, "scaler": scaler, "imputer": imputer}, path)
     return path
