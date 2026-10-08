@@ -1,90 +1,126 @@
-# 🧠🩺 MedPredict AI
+# MedPredictor-AI
 
-AI-powered healthcare intelligence system that predicts diseases and analyzes patient health data using machine learning.
+MedPredictor-AI is an offline Python machine-learning research project for experimenting with diabetes and ten-year cardiovascular-risk classification.
 
-## 🚀 Overview
+It trains several scikit-learn classifiers, compares their performance, generates diagnostic plots, saves the best trained artifact, and runs a sample or interactive prediction.
 
-MedPredict AI is a machine learning-based healthcare analytics system that helps identify potential diseases based on patient health parameters.
+> **Medical disclaimer:** This repository is for education and research. Its predictions are not medical diagnoses and must not be used as a substitute for a qualified clinician or for patient-care decisions.
 
-The system analyzes medical data and provides predictive insights to assist healthcare professionals and researchers.
+## What it does
 
-## ✨ Features
+### Diabetes
+Uses the PIMA Indians Diabetes dataset with predictors for pregnancies, glucose, blood pressure, skin thickness, insulin, BMI, diabetes pedigree function, and age.
 
-- 🔍 Disease prediction using ML models
-- 📊 Patient health data analysis
-- ⚡ Fast medical data inference
-- 📈 Data visualization for health trends
-- 🧠 Intelligent prediction engine
+### Heart disease
+Uses the Framingham dataset and its original `TenYearCHD` target, renamed in code to `HeartDiseaseRisk`.
 
-## 🏗️ Tech Stack
+## Models
 
-- Python
-- Machine Learning
-- Pandas
-- NumPy
-- Scikit-Learn
-- Matplotlib / Seaborn
-- Jupyter Notebook
+The pipeline evaluates:
 
-## 🧠 How It Works
+- Logistic Regression
+- Random Forest
+- Gradient Boosting
+- Support Vector Machine
+- K-Nearest Neighbors
 
-1. Patient medical data is collected
-2. Data is preprocessed and cleaned
-3. ML models analyze patterns
-4. The system predicts possible diseases
-5. Results are visualized for interpretation
+Models are ranked by ROC AUC on the held-out test set.
 
-## 📂 Project Structure
+## Requirements
 
-```
-MedicalPrediction AI/
-├── README.md
-├── requirements.txt
-├── data/
-│   ├── diabetes.csv              # PIMA Indians Diabetes Dataset
-│   └── framingham.csv            # Framingham Heart Study Dataset
-├── src/
-│   ├── __init__.py
-│   ├── data_preprocessing.py     # Data loading & cleaning
-│   ├── feature_engineering.py    # Feature analysis & selection
-│   ├── models.py                 # ML model training & evaluation
-│   ├── visualization.py          # Charts & plots
-│   └── predict.py                # Prediction engine
-├── notebooks/
-│   └── MedPredict_Analysis.ipynb # Interactive analysis notebook
-├── outputs/
-│   └── (generated plots & reports)
-└── main.py                       # CLI entry point
-```
+- Python 3.10+
+- pip
 
-## 🚀 Quick Start
+Install runtime dependencies:
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+~~~bash
+python -m pip install -r requirements.txt
+~~~
 
-# Run the full pipeline
+For development/testing:
+
+~~~bash
+python -m pip install -r requirements-dev.txt
+~~~
+
+## Run
+
+Train and evaluate both datasets:
+
+~~~bash
 python main.py
+~~~
 
-# Run specific predictions
+Only diabetes:
+
+~~~bash
 python main.py --disease diabetes
+~~~
+
+Only heart-risk:
+
+~~~bash
 python main.py --disease heart
+~~~
 
-# Interactive mode
-python main.py --interactive
-```
+Enter a custom example patient after training:
 
-## 📊 Use Cases
+~~~bash
+python main.py --disease diabetes --interactive
+python main.py --disease heart --interactive
+~~~
 
-- Medical research
-- Early disease prediction
-- Healthcare data analysis
-- Clinical decision support
+Generated plots and trusted local model artifacts are written to `outputs/`.
 
-## ⚠️ Disclaimer
+## Project layout
 
-This project is for educational and research purposes only and should not replace professional medical advice.
+~~~text
+MedPredictor-AI/
+├── data/
+│   ├── diabetes.csv
+│   └── framingham.csv
+├── notebooks/
+├── Health related project/   # original exploratory material
+├── main.py
+├── data_preprocessing.py
+├── feature_engineering.py
+├── models.py
+├── predict.py
+├── visualization.py
+├── requirements.txt
+├── requirements-dev.txt
+├── tests/
+└── outputs/
+~~~
 
-## 👨‍💻 Author
+## Data handling
 
-Built by developers passionate about AI and healthcare innovation.
+For diabetes, zero values in Glucose, BloodPressure, SkinThickness, Insulin, and BMI are treated as missing and replaced with the corresponding dataset median.
+
+For heart disease, rows containing missing values are removed and `TenYearCHD` is renamed to `HeartDiseaseRisk`.
+
+Scaling is fitted only on the training split and then applied to the test split, avoiding test-set leakage.
+
+## Security and reliability
+
+- Dataset and output paths are resolved relative to the repository.
+- Generated filenames accept only simple local names; path traversal is rejected.
+- Patient inputs must be numeric and finite.
+- The project does not load user-supplied model files.
+- Local model artifacts are written with joblib only after training.
+- Joblib is kept above the historical arbitrary-code-execution threshold; GitHub's advisory database lists versions below 1.2.0 as affected. citeturn922828search3
+- scikit-learn is pinned to its currently supported 1.9.x line; its security policy currently lists 1.9.1 as supported and older releases as unsupported. citeturn922828search0
+
+Do not load a .joblib or pickle file from an untrusted source. Python object deserialization is not a safe interchange format.
+
+## Development
+
+~~~bash
+python -m pytest
+~~~
+
+Tests cover dataset loading, feature-analysis edge cases, input validation, and model-artifact path handling.
+
+## License
+
+MIT

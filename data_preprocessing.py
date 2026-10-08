@@ -1,66 +1,86 @@
-"""Data loading and preprocessing for MedPredict AI."""
+"""Dataset loading and preprocessing for MedPredictor-AI."""
 
-import os
-import pandas as pd
+from pathlib import Path
+
 import numpy as np
-from sklearn.preprocessing import StandardScaler
+import pandas as pd
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+ROOT_DIR = Path(__file__).resolve().parent
+DATA_DIR = ROOT_DIR / "data"
 
 
-def load_diabetes_data():
-    """Load and preprocess the PIMA Indians Diabetes Dataset."""
-    path = os.path.join(DATA_DIR, "diabetes.csv")
-    df = pd.read_csv(path)
+def _load_csv(filename: str) -> pd.DataFrame:
+    path = DATA_DIR / filename
+    if not path.is_file():
+        raise FileNotFoundError(f"Dataset not found: {path}")
+    return pd.read_csv(path)
 
-    # Replace 0s with NaN for columns where 0 is not a valid value
-    zero_invalid_cols = ["Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"]
+
+def load_diabetes_data() -> pd.DataFrame:
+    """Load the PIMA diabetes dataset and impute invalid zero measurements."""
+    df = _load_csv("diabetes.csv")
+    required = {
+        "Pregnancies", "Glucose", "BloodPressure", "SkinThickness",
+        "Insulin", "BMI", "DiabetesPedigreeFunction", "Age", "Outcome",
+    }
+    missing = required.difference(df.columns)
+    if missing:
+        raise ValueError(f"Diabetes dataset is missing columns: {sorted(missing)}")
+
+    zero_invalid_cols = [
+        "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"
+    ]
     df[zero_invalid_cols] = df[zero_invalid_cols].replace(0, np.nan)
+    for column in zero_invalid_cols:
+        df[column] = df[column].fillna(df[column].median())
 
-    # Fill missing values with median
-    for col in zero_invalid_cols:
-        df[col] = df[col].fillna(df[col].median())
-
+    if df["Outcome"].nunique() != 2:
+        raise ValueError("Diabetes target must contain exactly two classes.")
     return df
 
 
-def load_heart_data():
-    """Load and preprocess the Framingham Heart Study Dataset."""
-    path = os.path.join(DATA_DIR, "framingham.csv")
-    df = pd.read_csv(path)
-
-    # Drop rows with missing values (small percentage)
-    df = df.dropna()
-
-    # Rename target column for clarity
+def load_heart_data() -> pd.DataFrame:
+    """Load and clean the Framingham heart-risk dataset."""
+    df = _load_csv("framingham.csv").dropna()
+    if "TenYearCHD" not in df.columns:
+        raise ValueError("Heart dataset is missing the TenYearCHD target column.")
     df = df.rename(columns={"TenYearCHD": "HeartDiseaseRisk"})
-
+    if df["HeartDiseaseRisk"].nunique() != 2:
+        raise ValueError("Heart target must contain exactly two classes.")
     return df
 
 
-def prepare_dataset(df, target_col, test_size=0.2, random_state=42):
-    """Split and scale a dataset for model training.
+def prepare_dataset(
+    df: pd.DataFrame,
+    target_col: str,
+    test_size: float = 0.2,
+    random_state: int = 42,
+):
+    """Split and scale a dataset without leaking test-set statistics."""
+    if target_col not in df.columns:
+        raise ValueError(f"Target column not found: {target_col}")
 
-    Returns: X_train, X_test, y_train, y_test, scaler, feature_names
-    """
     X = df.drop(columns=[target_col])
     y = df[target_col]
     feature_names = list(X.columns)
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
+        X,
+        y,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=y,
     )
 
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
-
     return X_train_scaled, X_test_scaled, y_train, y_test, scaler, feature_names
 
 
-def get_dataset_summary(df, name):
-    """Return a summary dict of the dataset."""
+def get_dataset_summary(df: pd.DataFrame, name: str) -> dict:
     return {
         "name": name,
         "rows": len(df),
