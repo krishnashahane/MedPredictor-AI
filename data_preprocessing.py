@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
@@ -33,9 +34,6 @@ def load_diabetes_data() -> pd.DataFrame:
         "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"
     ]
     df[zero_invalid_cols] = df[zero_invalid_cols].replace(0, np.nan)
-    for column in zero_invalid_cols:
-        df[column] = df[column].fillna(df[column].median())
-
     if df["Outcome"].nunique() != 2:
         raise ValueError("Diabetes target must contain exactly two classes.")
     return df
@@ -74,10 +72,22 @@ def prepare_dataset(
         stratify=y,
     )
 
+    imputer = SimpleImputer(strategy="median")
+    X_train_imputed = imputer.fit_transform(X_train)
+    X_test_imputed = imputer.transform(X_test)
+
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    return X_train_scaled, X_test_scaled, y_train, y_test, scaler, feature_names
+    X_train_scaled = scaler.fit_transform(X_train_imputed)
+    X_test_scaled = scaler.transform(X_test_imputed)
+    return (
+        X_train_scaled,
+        X_test_scaled,
+        y_train,
+        y_test,
+        scaler,
+        feature_names,
+        imputer,
+    )
 
 
 def get_dataset_summary(df: pd.DataFrame, name: str) -> dict:
