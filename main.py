@@ -95,7 +95,7 @@ def run_pipeline(disease: str, interactive: bool = False) -> list[dict]:
     plot_target_distribution(df, target_col, disease_title, f"{disease}_target_dist.png")
 
     print_section("Preparing Data")
-    X_train, X_test, y_train, y_test, scaler, feature_names = prepare_dataset(
+    X_train, X_test, y_train, y_test, scaler, feature_names, imputer = prepare_dataset(
         df, target_col
     )
     print(f"  Training set: {X_train.shape[0]} samples")
@@ -157,7 +157,7 @@ def run_pipeline(disease: str, interactive: bool = False) -> list[dict]:
     )
 
     print_section("Saving Best Model")
-    model_path = save_model(best["trained_model"], scaler, model_filename)
+    model_path = save_model(best["trained_model"], scaler, model_filename, imputer=imputer)
     print(f"  Model saved: {model_path}")
 
     print_section("Prediction Demo")
